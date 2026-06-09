@@ -1,0 +1,126 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Pin background -->
+    <path
+        android:fillColor="#59B390"
+        android:pathData="M256,8
+            C138,8 42,104 42,222
+            C42,323 112,403 213,485
+            C237,504 275,504 299,485
+            C400,403 470,323 470,222
+            C470,104 374,8 256,8Z" />
+
+    <!-- White circle -->
+    <path
+        android:fillColor="#F2F2F2"
+        android:pathData="M256,52
+            A170,170 0 1,1 255.9,52Z" />
+
+    <!-- Shadow -->
+    <path
+        android:fillColor="#53A883"
+        android:pathData="M120,325
+            A136,68 0 1,0 392,325
+            A136,68 0 1,0 120,325Z" />
+
+    <!-- Left building -->
+    <path
+        android:fillColor="#B7CCD0"
+        android:pathData="M118,198
+            H198
+            V325
+            H118Z" />
+
+    <!-- Center building -->
+    <path
+        android:fillColor="#BCD0D3"
+        android:pathData="M198,152
+            H314
+            V325
+            H198Z" />
+
+    <!-- Right building -->
+    <path
+        android:fillColor="#B7CCD0"
+        android:pathData="M314,198
+            H394
+            V325
+            H314Z" />
+
+    <!-- Roof -->
+    <path
+        android:fillColor="#3F7A98"
+        android:pathData="M166,119
+            H346
+            A10,10 0 0,1 356,129
+            V143
+            A10,10 0 0,1 346,153
+            H166
+            A10,10 0 0,1 156,143
+            V129
+            A10,10 0 0,1 166,119Z" />
+
+    <!-- Door -->
+    <path
+        android:fillColor="#3F7A98"
+        android:pathData="M239,274
+            H273
+            A6,6 0 0,1 279,280
+            V325
+            H233
+            V280
+            A6,6 0 0,1 239,274Z" />
+
+    <!-- Windows -->
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M118,230
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M118,274
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M374,230
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M374,274
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M228,188
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M270,188
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M228,230
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+
+    <path
+        android:fillColor="#4E88B2"
+        android:pathData="M270,230
+            a10,10 0 1,0 20,0
+            a10,10 0 1,0 -20,0" />
+</vector>

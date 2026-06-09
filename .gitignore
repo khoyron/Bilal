@@ -1,0 +1,32 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+/google-services.json
+*.hprof
+
+# Kotlin Multiplatform
+.kotlin
+.fleet
+
+# iOS
+**/iosApp.xcworkspace/xcuserdata/
+**/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
+**/iosApp.xcodeproj/xcuserdata/
+DerivedData/
+build/
+.apple
+
+# Desktop
+/composeApp/build/
