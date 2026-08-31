@@ -1,0 +1,4 @@
+- [ ] Update `QiblahViewModel` to ignore "near-zero" coordinates (denormals)
+- [ ] Fix `handleLocation` to use raw coordinates in `locationName`
+- [ ] Refine `updateInstruction` to use a stricter threshold and better logic
+- [ ] Verify build and non-zero coordinate display on iOS

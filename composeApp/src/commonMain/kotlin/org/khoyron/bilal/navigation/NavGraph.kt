@@ -53,27 +53,27 @@ fun NavGraph(
 
         // ── Surah Detail ──────────────────────────────────────────────────
         composable<SurahDetail> { backStackEntry ->
-            val route = backStackEntry.toRoute<SurahDetail>()  // ← clean, no getString!
+            val route = backStackEntry.toRoute<SurahDetail>()
             SurahDetailScreen(
                 surahNumber = route.surahNumber,
                 onBack      = { navController.popBackStack() }
             )
         }
-//        composable(
-//            route = Screen.SurahDetail.route,
-//            arguments = listOf(
-//                navArgument("surahNumber") { type = NavType.IntType }
-//            )
-//        ) { backStackEntry ->
-//            val surahNumber = backStackEntry.arguments.getString("surahNumber")?.toIntOrNull() ?: 1
-//            SurahDetailScreen(
-//                surahNumber = surahNumber,
-//                onBack      = { navController.popBackStack() }
-//            )
-//        }
+
+        // ── Juz Detail ────────────────────────────────────────────────────
+        composable<JuzDetail> { backStackEntry ->
+            val route = backStackEntry.toRoute<JuzDetail>()
+            SurahDetailScreen(
+                juzNumber = route.juzNumber,
+                onBack    = { navController.popBackStack() }
+            )
+        }
     }
 }
 
 
 @Serializable
 data class SurahDetail(val surahNumber: Int)
+
+@Serializable
+data class JuzDetail(val juzNumber: Int)

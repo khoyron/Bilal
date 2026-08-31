@@ -47,13 +47,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import bilal.composeapp.generated.resources.Res
+import bilal.composeapp.generated.resources.amiri_quran
 import bilal.composeapp.generated.resources.ic_alquran_white
 import bilal.composeapp.generated.resources.ic_search
 import bilal.composeapp.generated.resources.img_mosque
+import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 import org.khoyron.bilal.navigation.SurahDetail
+import org.khoyron.bilal.navigation.JuzDetail
 
 // ── Warna tema ────────────────────────────────────────────────────────────────
 private val Green         = Color(0xFF2D6A4F)
@@ -69,6 +72,11 @@ private val TextMid       = Color(0xFF6B7280)
 private val StarInactive  = Color(0xFFCBD5E0)
 private val StarActive    = Color(0xFF2D6A4F)
 
+@Composable
+fun getAmiriFontFamily() = FontFamily(
+    Font(Res.font.amiri_quran, FontWeight.Normal)
+)
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -78,6 +86,31 @@ fun QuranScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    QuranContent(
+        uiState = uiState,
+        onTabSelected = { viewModel.selectTab(it) },
+        onFavoriteToggle = { viewModel.toggleFavorite(it) },
+        onSurahClick = { surah ->
+            navController.navigate(SurahDetail(surahNumber = surah.number))
+        },
+        onJuzClick = { juz ->
+            navController.navigate(JuzDetail(juzNumber = juz.number))
+        },
+        onLastReadClick = { lastRead ->
+            navController.navigate(SurahDetail(surahNumber = lastRead.surahNumber))
+        }
+    )
+}
+
+@Composable
+fun QuranContent(
+    uiState: QuranUiState,
+    onTabSelected: (QuranTab) -> Unit,
+    onFavoriteToggle: (Int) -> Unit,
+    onSurahClick: (SurahUi) -> Unit,
+    onJuzClick: (JuzUi) -> Unit,
+    onLastReadClick: (LastReadUi) -> Unit
+) {
     MaterialTheme {
         Column(
             modifier = Modifier
@@ -99,10 +132,7 @@ fun QuranScreen(
                             LastReadBanner(
                                 surahName  = lastRead.surahName,
                                 ayahNumber = lastRead.ayahNumber,
-                                onContinue = {
-                                    // navigate ke surah terakhir yang dibaca
-                                    navController.navigate(SurahDetail(surahNumber = lastRead.surahNumber))
-                                }
+                                onContinue = { onLastReadClick(lastRead) }
                             )
                         }
                     }
@@ -113,7 +143,7 @@ fun QuranScreen(
                 item {
                     QuranTabRow(
                         selectedTab = uiState.selectedTab,
-                        onTabSelected = { viewModel.selectTab(it) }
+                        onTabSelected = onTabSelected
                     )
                     Spacer(Modifier.height(12.dp))
                 }
@@ -130,12 +160,8 @@ fun QuranScreen(
                             items(uiState.surahList, key = { it.number }) { surah ->
                                 SurahItem(
                                     surah = surah,
-                                    onFavoriteToggle = { viewModel.toggleFavorite(surah.number) },
-                                    onClick = {
-                                        navController.navigate(
-                                            SurahDetail(surahNumber = surah.number)
-                                        )
-                                    }
+                                    onFavoriteToggle = { onFavoriteToggle(surah.number) },
+                                    onClick = { onSurahClick(surah) }
                                 )
                                 Spacer(Modifier.height(8.dp))
                             }
@@ -144,10 +170,7 @@ fun QuranScreen(
                             items(uiState.juzList, key = { it.number }) { juz ->
                                 JuzItem(
                                     juz = juz,
-                                    onClick = {
-                                        // TODO: navigate to juz detail
-                                        // navController.navigate(Screen.JuzDetail.createRoute(juz.number))
-                                    }
+                                    onClick = { onJuzClick(juz) }
                                 )
                                 Spacer(Modifier.height(8.dp))
                             }
@@ -182,16 +205,6 @@ fun shimmerBrush(): Brush {
     )
 }
 
-@Preview
-@Composable
-fun TestPreview(){
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color.White)
-    ) {
-        QuranTopBar()
-    }
-
-}
 
 // ── Top Bar ───────────────────────────────────────────────────────────────────
 
@@ -218,7 +231,9 @@ fun QuranTopBar() {
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .clickable { /* TODO: open search */ },
+                .clickable {
+
+                },
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -433,8 +448,8 @@ fun SurahItem(
             // Nama Arab
             Text(
                 text = surah.nameArabic,
-                fontSize = 18.sp,
-                fontFamily = FontFamily.Default,
+                fontSize = 20.sp,
+                fontFamily = getAmiriFontFamily(),
                 color = GreenMid,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.End
@@ -601,4 +616,31 @@ fun ShimmerSurahItem(brush: Brush) {
             )
         }
     }
+}
+
+@Preview
+@Composable
+fun QuranPreview() {
+    val dummySurahList = listOf(
+        SurahUi(1, "Al-Fatihah", "الفاتحة", "THE OPENING", 7),
+        SurahUi(2, "Al-Baqarah", "البقرة", "THE COW", 286),
+        SurahUi(3, "Ali 'Imran", "آل عمران", "FAMILY OF IMRAN", 200)
+    )
+    val dummyJuzList = listOf(
+        JuzUi(1, "Juz' 1", "Al-Fatihah 1", "Al-Baqarah 141", 148),
+        JuzUi(2, "Juz' 2", "Al-Baqarah 142", "Al-Baqarah 252", 111)
+    )
+    QuranContent(
+        uiState = QuranUiState(
+            isLoading = false,
+            surahList = dummySurahList,
+            juzList = dummyJuzList,
+            lastRead = LastReadUi("Al-Baqarah", 2, 142)
+        ),
+        onTabSelected = {},
+        onFavoriteToggle = {},
+        onSurahClick = {},
+        onJuzClick = {},
+        onLastReadClick = {}
+    )
 }

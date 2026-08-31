@@ -2,16 +2,19 @@ package org.khoyron.bilal.ui.quran.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.khoyron.bilal.domain.usecase.GetSurahDetailUseCase
+import org.khoyron.bilal.domain.usecase.GetJuzDetailUseCase
+import org.khoyron.bilal.util.AudioPlayer
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
 data class AyahUi(
+    val globalNumber: Int,
     val surahNumber: Int,
     val ayahNumber: Int,
     val arabic: String,
@@ -32,41 +35,92 @@ data class SurahDetailUiState(
     val isLoading: Boolean = true,
     val surah: SurahDetailUi? = null,
     val isPlaying: Boolean = false,
+    val playingAyahNumber: Int? = null,
     val error: String? = null
 )
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
-class SurahDetailViewModel : ViewModel() {
+class SurahDetailViewModel(
+    private val getSurahDetailUseCase: GetSurahDetailUseCase,
+    private val getJuzDetailUseCase: GetJuzDetailUseCase,
+    private val audioPlayer: AudioPlayer
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SurahDetailUiState())
     val uiState: StateFlow<SurahDetailUiState> = _uiState.asStateFlow()
 
     init {
-        loadSurah()
+        audioPlayer.setOnCompletionListener {
+            _uiState.update { it.copy(isPlaying = false) }
+        }
+        audioPlayer.setOnUrlChangeListener { url ->
+            if (url == null) return@setOnUrlChangeListener
+            val globalNumber = url.substringAfterLast("/").substringBefore(".mp3").toIntOrNull()
+            if (globalNumber != null) {
+                _uiState.update { it.copy(playingAyahNumber = globalNumber) }
+            }
+        }
     }
 
-    fun loadSurah(surahNumber: Int = 1) {
+    fun loadSurah(surahNumber: Int) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            // Simulasi network delay — ganti dengan API call nanti
-            // Contoh: val response = quranRepository.getSurahDetail(surahNumber)
-            delay(1500)
-
-            val surah = when (surahNumber) {
-                1    -> getDummyAlFatihah()
-                else -> getDummyAlFatihah() // fallback dummy
+            try {
+                val surah = getSurahDetailUseCase(surahNumber)
+                _uiState.update {
+                    it.copy(isLoading = false, surah = surah)
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = e.message ?: "Failed to load Surah")
+                }
             }
+        }
+    }
 
-            _uiState.update {
-                it.copy(isLoading = false, surah = surah)
+    fun loadJuz(juzNumber: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+
+            try {
+                val juz = getJuzDetailUseCase(juzNumber)
+                _uiState.update {
+                    it.copy(isLoading = false, surah = juz)
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = e.message ?: "Failed to load Juz")
+                }
             }
         }
     }
 
     fun togglePlayAudio() {
-        _uiState.update { it.copy(isPlaying = !it.isPlaying) }
+        val currentSurah = _uiState.value.surah ?: return
+        val isCurrentlyPlaying = _uiState.value.isPlaying
+
+        if (isCurrentlyPlaying) {
+            audioPlayer.pause()
+            _uiState.update { it.copy(isPlaying = false) }
+        } else {
+            if (audioPlayer.isPlaying()) {
+                audioPlayer.resume()
+                _uiState.update { it.copy(isPlaying = true) }
+            } else {
+                val urls = currentSurah.ayahs.map {
+                    "https://cdn.islamic.network/quran/audio/128/ar.alafasy/${it.globalNumber}.mp3"
+                }
+                audioPlayer.play(urls)
+                _uiState.update { it.copy(isPlaying = true) }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioPlayer.release()
     }
 
     fun toggleBookmark(ayahNumber: Int) {
@@ -84,66 +138,20 @@ class SurahDetailViewModel : ViewModel() {
     }
 
     fun onShareAyah(ayah: AyahUi) {
-        // TODO: implement share intent per platform
+
     }
 
     fun onPlayAyah(ayah: AyahUi) {
-        // TODO: implement play single ayah audio
-    }
+        val isCurrentlyPlaying = _uiState.value.isPlaying
+        val isSameAyah = _uiState.value.playingAyahNumber == ayah.globalNumber
 
-    // ── Dummy data — ganti dengan repository/API ──────────────────────────────
-
-    private fun getDummyAlFatihah(): SurahDetailUi {
-        return SurahDetailUi(
-            number = 1,
-            nameLatn = "Al-Fatihah",
-            nameArabic = "الفاتحة",
-            translation = "THE OPENING",
-            totalAyah = 7,
-            ayahs = listOf(
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 1,
-                    arabic = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-                    translation = "In the name of Allah, the Entirely Merciful, the Especially Merciful."
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 2,
-                    arabic = "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
-                    translation = "[All] praise is [due] to Allah, Lord of the worlds -"
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 3,
-                    arabic = "الرَّحْمَٰنِ الرَّحِيمِ",
-                    translation = "The Entirely Merciful, the Especially Merciful,"
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 4,
-                    arabic = "مَالِكِ يَوْمِ الدِّينِ",
-                    translation = "Sovereign of the Day of Recompense."
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 5,
-                    arabic = "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
-                    translation = "It is You we worship and You we ask for help."
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 6,
-                    arabic = "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ",
-                    translation = "Guide us to the straight path -"
-                ),
-                AyahUi(
-                    surahNumber = 1,
-                    ayahNumber = 7,
-                    arabic = "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ",
-                    translation = "The path of those upon whom You have bestowed favor, not of those who have evoked [Your] anger or of those who are astray."
-                )
-            )
-        )
+        if (isCurrentlyPlaying && isSameAyah) {
+            audioPlayer.pause()
+            _uiState.update { it.copy(isPlaying = false) }
+        } else {
+            val urls = listOf("https://cdn.islamic.network/quran/audio/128/ar.alafasy/${ayah.globalNumber}.mp3")
+            audioPlayer.play(urls)
+            _uiState.update { it.copy(isPlaying = true, playingAyahNumber = ayah.globalNumber) }
+        }
     }
 }

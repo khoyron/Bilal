@@ -134,9 +134,14 @@ class AzanViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                val prayers = getAzanTimesUseCase(lat, lon)
+                val country = _uiState.value.countryName
+                val methodId = getMethodIdForCountry(country)
+                val prayers = getAzanTimesUseCase(lat, lon, methodId)
                 val enriched = generatePrayerUi(prayers)
                 val next = getNextPrayer(enriched)
+                
+                // Save next prayer to session
+                sessionManager.saveNextPrayer("${next.name} ${next.time}")
 
                 _uiState.update {
                     it.copy(
@@ -165,6 +170,9 @@ class AzanViewModel(
 
                 val enriched = generatePrayerUi(state.prayerList)
                 val next = getNextPrayer(enriched)
+                
+                // Keep session updated
+                sessionManager.saveNextPrayer("${next.name} ${next.time}")
 
                 _uiState.update {
                     it.copy(
@@ -312,6 +320,31 @@ class AzanViewModel(
     private fun parseToMinutes(time: String): Int {
         val parts = time.split(":")
         return (parts[0].toInt() * 60) + parts[1].toInt()
+    }
+
+    private fun getMethodIdForCountry(country: String): String {
+        return when (country.lowercase()) {
+            "indonesia", "id" -> "20"
+            "malaysia", "my" -> "17"
+            "singapore", "sg" -> "11"
+            "saudi arabia", "sa" -> "4"
+            "egypt", "eg" -> "5"
+            "turkey", "tr" -> "13"
+            "russia", "ru" -> "14"
+            "united arab emirates", "ae" -> "16"
+            "qatar", "qa" -> "10"
+            "kuwait", "kw" -> "9"
+            "france", "fr" -> "12"
+            "morocco", "ma" -> "21"
+            "tunisia", "tn" -> "18"
+            "algeria", "dz" -> "19"
+            "jordan", "jo" -> "23"
+            "portugal", "pt" -> "22"
+            "pakistan", "pk" -> "1"
+            "iran", "ir" -> "7"
+            "united states", "us", "canada", "ca" -> "2"
+            else -> "3" // Default to Muslim World League (MWL)
+        }
     }
 
     private fun Int.toTwoDigits(): String = toString().padStart(2, '0')

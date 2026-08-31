@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bilal.composeapp.generated.resources.Res
+import bilal.composeapp.generated.resources.ic_back
 import bilal.composeapp.generated.resources.ic_map_picker
 import bilal.composeapp.generated.resources.ic_picker_location
 import bilal.composeapp.generated.resources.ic_point_location
@@ -124,7 +125,9 @@ fun MapPickerContent(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Image(
+                            painterResource(Res.drawable.ic_back),
+                            contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

@@ -29,6 +29,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -42,11 +43,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bilal.composeapp.generated.resources.Res
+import bilal.composeapp.generated.resources.amiri_quran
+import bilal.composeapp.generated.resources.ic_back
 import bilal.composeapp.generated.resources.ic_play
 import bilal.composeapp.generated.resources.ic_play_audio
 import bilal.composeapp.generated.resources.ic_save
 import bilal.composeapp.generated.resources.ic_share
+import bilal.composeapp.generated.resources.reemkufi_reguler
+import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 
 // ── Warna tema ────────────────────────────────────────────────────────────────
@@ -61,16 +67,54 @@ private val TextDark     = Color(0xFF1A1A1A)
 private val TextMid      = Color(0xFF6B7280)
 private val IconGray     = Color(0xFF9CA3AF)
 
+@Composable
+fun getAmiriFontFamily() = androidx.compose.ui.text.font.FontFamily(
+    Font(Res.font.amiri_quran, FontWeight.Normal)
+)
+
+@Composable
+fun getKufiFontFamily() = androidx.compose.ui.text.font.FontFamily(
+    Font(Res.font.reemkufi_reguler, FontWeight.Light)
+)
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
 fun SurahDetailScreen(
-    surahNumber: Int = 1,
+    surahNumber: Int? = null,
+    juzNumber: Int? = null,
     onBack: () -> Unit = {},
     viewModel: SurahDetailViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    LaunchedEffect(surahNumber, juzNumber) {
+        if (surahNumber != null) {
+            viewModel.loadSurah(surahNumber)
+        } else if (juzNumber != null) {
+            viewModel.loadJuz(juzNumber)
+        }
+    }
+
+    SurahDetailContent(
+        uiState = uiState,
+        onBack = onBack,
+        onPlayAudio = { viewModel.togglePlayAudio() },
+        onPlayAyah = { viewModel.onPlayAyah(it) },
+        onBookmark = { viewModel.toggleBookmark(it) },
+        onShareAyah = { viewModel.onShareAyah(it) }
+    )
+}
+
+@Composable
+fun SurahDetailContent(
+    uiState: SurahDetailUiState,
+    onBack: () -> Unit,
+    onPlayAudio: () -> Unit,
+    onPlayAyah: (AyahUi) -> Unit,
+    onBookmark: (Int) -> Unit,
+    onShareAyah: (AyahUi) -> Unit
+) {
     MaterialTheme {
         Column(
             modifier = Modifier
@@ -94,10 +138,11 @@ fun SurahDetailScreen(
                         uiState.surah?.let { surah ->
                             SurahDetailBanner(
                                 nameLatn    = surah.nameLatn,
+                                nameArabic  = surah.nameArabic,
                                 translation = surah.translation,
                                 totalAyah   = surah.totalAyah,
                                 isPlaying   = uiState.isPlaying,
-                                onPlayAudio = { viewModel.togglePlayAudio() }
+                                onPlayAudio = onPlayAudio
                             )
                         }
                     }
@@ -114,10 +159,11 @@ fun SurahDetailScreen(
                     uiState.surah?.let { surah ->
                         items(surah.ayahs, key = { it.ayahNumber }) { ayah ->
                             AyahItem(
-                                ayah       = ayah,
-                                onPlay     = { viewModel.onPlayAyah(ayah) },
-                                onBookmark = { viewModel.toggleBookmark(ayah.ayahNumber) },
-                                onShare    = { viewModel.onShareAyah(ayah) }
+                                ayah          = ayah,
+                                isHighlighted = uiState.isPlaying && uiState.playingAyahNumber == ayah.globalNumber,
+                                onPlay        = { onPlayAyah(ayah) },
+                                onBookmark    = { onBookmark(ayah.ayahNumber) },
+                                onShare       = { onShareAyah(ayah) }
                             )
                             Spacer(Modifier.height(10.dp))
                         }
@@ -173,7 +219,9 @@ fun DetailTopBar(
                 .clickable { onBack() },
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "←", fontSize = 20.sp, color = TextDark)
+            Image(
+                painterResource(Res.drawable.ic_back),
+                contentDescription = "Back")
         }
 
         Text(
@@ -209,7 +257,8 @@ fun SurahDetailBanner(
     totalAyah: Int,
     isPlaying: Boolean,
     onPlayAudio: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    nameArabic: String
 ) {
     Box(
         modifier = modifier
@@ -271,14 +320,16 @@ fun SurahDetailBanner(
             // Kotak putih placeholder kaligrafi
             Box(
                 modifier = Modifier
-                    .size(width = 120.dp, height = 80.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(White),
+                    .background(White)
+                    .padding(horizontal = 20.dp, vertical = 5.dp)
+                ,
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text      = "﷽",
-                    fontSize  = 28.sp,
+                    text      = nameArabic,// سورة
+                    fontSize  = 20.sp,
+                    fontFamily = getKufiFontFamily(),
                     color     = GreenDark,
                     textAlign = TextAlign.Center
                 )
@@ -320,6 +371,7 @@ fun SurahDetailBanner(
 @Composable
 fun AyahItem(
     ayah: AyahUi,
+    isHighlighted: Boolean,
     onPlay: () -> Unit,
     onBookmark: () -> Unit,
     onShare: () -> Unit,
@@ -367,6 +419,7 @@ fun AyahItem(
                     AyahActionIcon(
                         iconRes     = Res.drawable.ic_play,
                         description = "Play",
+                        tint        = if (isHighlighted) Green else IconGray,
                         onClick     = onPlay
                     )
                     AyahActionIcon(
@@ -388,14 +441,15 @@ fun AyahItem(
             // ── Teks Arab ─────────────────────────────────────────────
             Text(
                 text      = ayah.arabic,
-                fontSize  = 26.sp,
-                color     = TextDark,
+                fontSize  = 23.sp,
+                fontFamily = getAmiriFontFamily(),
+                color     = if (isHighlighted) GreenMid else TextDark,
                 textAlign = TextAlign.End,
-                lineHeight = 44.sp,
+                lineHeight = 57.sp,
                 modifier  = Modifier.fillMaxWidth()
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(15.dp))
 
             // ── Terjemahan ────────────────────────────────────────────
             Text(
@@ -533,3 +587,30 @@ private fun Modifier.offset(x: androidx.compose.ui.unit.Dp = 0.dp, y: androidx.c
         start = if (x > 0.dp) x else 0.dp,
         top   = if (y > 0.dp) y else 0.dp
     )
+
+@Preview
+@Composable
+fun SurahDetailPreview() {
+    val dummyAyahs = listOf(
+        AyahUi(1,1, 1, "سَيَقُولُ ٱلسُّفَهَآءُ مِنَ ٱلنَّاسِ مَا وَلَّىٰهُمْ عَن قِبْلَتِهِمُ ٱلَّتِى كَانُوا۟ عَلَيْهَا ۚ قُل لِّلَّهِ ٱلْمَشْرِقُ وَٱلْمَغْرِبُ ۚ يَهْدِى مَن يَشَآءُ إِلَىٰ صِرَٰطٍۢ مُّسْتَقِيمٍۢ", "In the name of Allah, the Entirely Merciful, the Especially Merciful."),
+        AyahUi(2,1, 2, "وَكَذَٰلِكَ جَعَلْنَٰكُمْ أُمَّةًۭ وَسَطًۭا لِّتَكُونُوا۟ شُهَدَآءَ عَلَى ٱلنَّاسِ وَيَكُونَ ٱلرَّسُولُ عَلَيْكُمْ شَهِيدًۭا ۗ وَمَا جَعَلْنَا ٱلْقِبْلَةَ ٱلَّتِى كُنتَ عَلَيْهَآ إِلَّا لِنَعْلَمَ مَن يَتَّبِعُ ٱلرَّسُولَ مِمَّن يَنقَلِبُ عَلَىٰ عَقِبَيْهِ ۚ وَإِن كَانَتْ لَكَبِيرَةً إِلَّا عَلَى ٱلَّذِينَ هَدَى ٱللَّهُ ۗ وَمَا كَانَ ٱللَّهُ لِيُضِيعَ إِيمَٰنَكُمْ ۚ إِنَّ ٱللَّهَ بِٱلنَّاسِ لَرَءُوفٌۭ رَّحِيمٌَۭ", " [All] praise is [due] to Allah, Lord of the worlds -"),
+        AyahUi(3,1, 3, "الرَّحْمَٰنِ الرَّحِيمِ", "The Entirely Merciful, the Especially Merciful,"),
+        AyahUi(4,1, 4, "مَالِكِ يَوْمِ الدِّينِ", "Sovereign of the Day of Recompense.")
+    )
+    val dummySurahDetail = SurahDetailUi(
+        number = 1,
+        nameLatn = "Al-Fatihah",
+        nameArabic = "الفاتحة",
+        translation = "The Opening",
+        totalAyah = 7,
+        ayahs = dummyAyahs
+    )
+    SurahDetailContent(
+        uiState = SurahDetailUiState(isLoading = false, surah = dummySurahDetail),
+        onBack = {},
+        onPlayAudio = {},
+        onPlayAyah = {},
+        onBookmark = {},
+        onShareAyah = {}
+    )
+}

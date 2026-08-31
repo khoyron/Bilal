@@ -51,6 +51,8 @@ kotlin {
             implementation(libs.koin.android)
             // Ktor Android
             implementation(libs.ktor.client.okhttp)
+            // ExoPlayer
+            implementation(libs.media3.exoplayer)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -71,7 +73,6 @@ kotlin {
             implementation(libs.koin.compose.viewmodel)
             // Serialization
             implementation(libs.kotlinx.serialization.json)
-            implementation(libs.ksensor)
             // Compass Location & Geocoding
             implementation(libs.compass.geolocation)
             implementation(libs.compass.geocoder)

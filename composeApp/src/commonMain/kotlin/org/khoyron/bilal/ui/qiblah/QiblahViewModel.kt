@@ -2,22 +2,20 @@ package org.khoyron.bilal.ui.qiblah
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.jordond.compass.geocoder.Geocoder
+import dev.jordond.compass.geocoder.GeocoderResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.kmp.ksensor.sensor.KSensor
-import org.kmp.ksensor.sensor.SensorType
-import org.kmp.ksensor.sensor.SensorUpdate
-import org.kmp.ksensor.sensor.SensorData
-import org.kmp.ksensor.permission.PermissionStatus
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.absoluteValue
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 // ── UI State ──────────────────────────────────────────────────────────────────
 
@@ -32,95 +30,88 @@ data class QiblahUiState(
     val error: String? = null
 )
 
-class QiblahViewModel : ViewModel() {
+class QiblahViewModel(
+    private val sensorManager: QiblahSensorManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QiblahUiState())
     val uiState: StateFlow<QiblahUiState> = _uiState.asStateFlow()
+
+    private var lastGeocodedLat: Double = 0.0
+    private var lastGeocodedLon: Double = 0.0
+    private var hasCityName: Boolean = false
 
     // Koordinat Kakbah (Mekah)
     private val kaabahLat = 21.4225
     private val kaabahLon = 39.8262
 
-    // Lokasi user terakhir (default Surabaya)
-    private var currentLat: Double = -7.2575
-    private var currentLon: Double = 112.7521
-
-    // ── Sensor fusion data ────────────────────────────────────────────────────
-    // Raw sensor values
-    private var magX = 0f; private var magY = 0f; private var magZ = 0f
-    private var accX = 0f; private var accY = 0f; private var accZ = 0f
-
-    // Low pass filter smoothed values
-    private var smoothMagX = 0f; private var smoothMagY = 0f; private var smoothMagZ = 0f
-    private var smoothAccX = 0f; private var smoothAccY = 0f; private var smoothAccZ = 0f
-
-    // Alpha: 0.1 = sangat smooth (lambat), 0.3 = lebih responsif
-    private val alpha = 0.15f
-
     fun startSensors() {
         _uiState.update { it.copy(isPermissionGranted = true, isLoading = true) }
 
-        viewModelScope.launch {
-            KSensor.registerSensors(
-                types = listOf(
-                    SensorType.MAGNETOMETER,
-                    SensorType.ACCELEROMETER,
-                    SensorType.LOCATION
-                ),
-                locationIntervalMillis = 3000L
-            ).collect { sensorUpdate ->
-                when (sensorUpdate) {
-                    is SensorUpdate.Data  -> handleSensorData(sensorUpdate.data)
-                    is SensorUpdate.Error -> {
-                        _uiState.update {
-                            it.copy(error = sensorUpdate.toString(), isLoading = false)
-                        }
-                    }
-                }
+        sensorManager.start(
+            onBearingChanged = { bearing ->
+                updateBearing(bearing)
+            },
+            onLocationChanged = { lat, lon ->
+                handleLocation(lat, lon)
+            },
+            onError = { error ->
+                _uiState.update { it.copy(error = error, isLoading = false) }
             }
+        )
+    }
+
+    private fun handleLocation(lat: Double, lon: Double) {
+        // Ignore placeholder 0.0, 0.0 coordinates
+        if (lat == 0.0 && lon == 0.0) return
+
+        val qiblahAngle = getQiblahAngle(lat, lon)
+        
+        // Check if we need to update geocoding (moved > 1km or first time)
+        val isLocationChanged = abs(lat - lastGeocodedLat) > 0.01 || abs(lon - lastGeocodedLon) > 0.01
+        val shouldUpdateGeocode = !hasCityName || isLocationChanged
+
+        _uiState.update {
+            it.copy(
+                qiblahAngle = qiblahAngle.toFloat(),
+                // Only show coordinates if we don't have a city name yet
+                locationName = if (!hasCityName) {
+                    val formattedLat = (lat * 1000000).roundToInt() / 1000000.0
+                    val formattedLon = (lon * 1000000).roundToInt() / 1000000.0
+                    "$formattedLat, $formattedLon"
+                } else {
+                    it.locationName
+                },
+                isLoading = false
+            )
+        }
+        updateInstruction(qiblahAngle.toFloat(), _uiState.value.deviceBearing)
+        
+        if (shouldUpdateGeocode) {
+            lastGeocodedLat = lat
+            lastGeocodedLon = lon
+            updateLocationName(lat, lon)
         }
     }
 
-
-
-    private fun handleSensorData(data: SensorData) {
-        when (data) {
-            is SensorData.Magnetometer -> {
-                // Low pass filter untuk magnetometer
-                smoothMagX = alpha * data.x + (1 - alpha) * smoothMagX
-                smoothMagY = alpha * data.y + (1 - alpha) * smoothMagY
-                smoothMagZ = alpha * data.z + (1 - alpha) * smoothMagZ
-                magX = smoothMagX; magY = smoothMagY; magZ = smoothMagZ
-                calculateFusedBearing()
-            }
-            is SensorData.Accelerometer -> {
-                // Low pass filter untuk accelerometer
-                smoothAccX = alpha * data.x + (1 - alpha) * smoothAccX
-                smoothAccY = alpha * data.y + (1 - alpha) * smoothAccY
-                smoothAccZ = alpha * data.z + (1 - alpha) * smoothAccZ
-                accX = smoothAccX; accY = smoothAccY; accZ = smoothAccZ
-                calculateFusedBearing()
-            }
-            is SensorData.Location -> {
-                data.latitude?.let { lat ->
-                    data.longitude?.let { lon ->
-                        val latRounded = (lat * 100).toLong().toDouble() / 100
-                        val lonRounded = (lon * 100).toLong().toDouble() / 100
-                        currentLat = lat
-                        currentLon = lon
-                        val qiblahAngle = getQiblahAngle(lat, lon)
-                        _uiState.update {
-                            it.copy(
-                                qiblahAngle  = qiblahAngle.toFloat(),
-                                locationName = "${latRounded}°, ${lonRounded}°",
-                                isLoading    = false
-                            )
+    private fun updateLocationName(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            try {
+                val geocoder = Geocoder()
+                val result = geocoder.reverse(lat, lon)
+                if (result is GeocoderResult.Success) {
+                    val place = result.data.firstOrNull()
+                    if (place != null) {
+                        val city = place.locality ?: place.subAdministrativeArea ?: place.administrativeArea
+                        if (city != null) {
+                            hasCityName = true
+                            _uiState.update { it.copy(locationName = city) }
                         }
-                        updateInstruction(qiblahAngle.toFloat(), _uiState.value.deviceBearing)
                     }
                 }
+            } catch (e: Exception) {
+                // Fail silently
             }
-            else -> {}
         }
     }
 
@@ -130,21 +121,30 @@ class QiblahViewModel : ViewModel() {
     }
 
     private fun updateInstruction(qiblahAngle: Float, deviceBearing: Float) {
-        val diff = ((qiblahAngle - deviceBearing + 360) % 360)
-        val roundedDiff = diff.roundToInt()
+        // Calculate the shortest difference between qiblah and bearing
+        var diff = qiblahAngle - deviceBearing
+        while (diff < -180) diff += 360
+        while (diff > 180) diff -= 360
+        
+        val roundedDiff = diff.roundToInt().absoluteValue
+        
+        // Revert to qiblahAngle for cardinal direction as preferred by user
         val cardinal = getCardinalDirection(qiblahAngle)
 
+        // Threshold 10 degrees for a smoother "Facing Qibla" experience
+        val isFacingQibla = diff.absoluteValue < 10f
+
         val description = when {
-            diff < 10f || diff > 350f ->
+            isFacingQibla ->
                 "Your device is pointing towards the Holy Kaaba. ✓"
             else ->
                 "Your device is currently facing $cardinal towards the Holy Kaaba."
         }
 
         val instruction = when {
-            diff < 10f || diff > 350f -> "You are facing the Qibla! ✓"
-            diff <= 180f              -> "Rotate the phone ${roundedDiff}° to the left"
-            else                      -> "Rotate the phone ${360 - roundedDiff}° to the right"
+            isFacingQibla -> "You are facing the Qibla! ✓"
+            diff > 0      -> "Rotate the phone ${roundedDiff}° to the right"
+            else          -> "Rotate the phone ${roundedDiff}° to the left"
         }
 
         _uiState.update {
@@ -156,14 +156,13 @@ class QiblahViewModel : ViewModel() {
     }
 
     fun refreshLocation() {
+        hasCityName = false // Force re-geocoding
         stopSensors()
         startSensors()
     }
 
     fun stopSensors() {
-        KSensor.unregisterSensors(
-            listOf(SensorType.MAGNETOMETER, SensorType.ACCELEROMETER, SensorType.LOCATION)
-        )
+        sensorManager.stop()
     }
 
     override fun onCleared() {
@@ -172,49 +171,6 @@ class QiblahViewModel : ViewModel() {
     }
 
     // ── Kalkulasi ─────────────────────────────────────────────────────────────
-
-    /**
-     * Sensor fusion: Magnetometer + Accelerometer → bearing akurat
-     * meski device miring. Tidak butuh SensorManager (pure commonMain).
-     */
-    private fun calculateFusedBearing() {
-        // Normalisasi accelerometer
-        val accNorm = sqrt((accX * accX + accY * accY + accZ * accZ).toDouble()).toFloat()
-        if (accNorm == 0f) {
-            // Fallback ke magnetometer biasa kalau acc belum ada datanya
-            val bearing = calculateMagnetometerBearing(magX, magY)
-            updateBearing(bearing)
-            return
-        }
-
-        val ax = accX / accNorm
-        val ay = accY / accNorm
-        val az = accZ / accNorm
-
-        // Pitch & roll dari accelerometer
-        val pitch = atan2(ax.toDouble(), az.toDouble()).toFloat()
-        val roll  = atan2(ay.toDouble(), az.toDouble()).toFloat()
-
-        val cosPitch = cos(pitch.toDouble()).toFloat()
-        val sinPitch = sin(pitch.toDouble()).toFloat()
-        val cosRoll  = cos(roll.toDouble()).toFloat()
-        val sinRoll  = sin(roll.toDouble()).toFloat()
-
-        // Tilt-compensated magnetic field
-        val mx = magX * cosPitch + magZ * sinPitch
-        val my = magX * sinRoll * sinPitch + magY * cosRoll - magZ * sinRoll * cosPitch
-
-        var bearing = atan2(my.toDouble(), mx.toDouble()) * (180.0 / PI)
-        if (bearing < 0) bearing += 360.0
-
-        updateBearing(bearing.toFloat())
-    }
-
-    private fun calculateMagnetometerBearing(x: Float, y: Float): Float {
-        var bearing = atan2(y.toDouble(), x.toDouble()) * (180.0 / PI)
-        if (bearing < 0) bearing += 360.0
-        return bearing.toFloat()
-    }
 
     private fun getQiblahAngle(lat: Double, lon: Double): Double {
         val lat1 = lat * (PI / 180.0)

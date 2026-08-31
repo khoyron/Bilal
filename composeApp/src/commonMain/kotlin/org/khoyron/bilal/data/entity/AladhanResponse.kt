@@ -1,4 +1,4 @@
-package org.khoyron.bilal.data.remote
+package org.khoyron.bilal.data.entity
 
 import kotlinx.serialization.Serializable
 

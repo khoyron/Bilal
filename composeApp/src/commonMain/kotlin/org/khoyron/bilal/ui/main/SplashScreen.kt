@@ -14,10 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import org.koin.compose.viewmodel.koinViewModel
 
 // Warna utama dari desain splash screen
 private val SplashBackground = Color(0xFF6B9070)   // Sage green
@@ -44,17 +50,38 @@ private val WhiteSubtle       = White.copy(alpha = 0.75f)
 
 /**
  * Splash screen untuk Bilal Azan – Spiritual Tranquility.
- *
- * @param onSplashFinished Dipanggil setelah animasi selesai; navigasi ke layar berikutnya di sini.
  */
 @Composable
-fun SplashScreen(onSplashFinished: () -> Unit) {
+fun SplashScreen(
+    viewModel: SplashViewModel = koinViewModel(),
+    onSplashFinished: () -> Unit
+) {
+    val isReady by viewModel.isReady.collectAsState()
+    val error by viewModel.error.collectAsState()
 
+    SplashScreenContent(
+        isReady = isReady,
+        error = error,
+        onOkClicked = { viewModel.onOkClicked() },
+        onSplashFinished = onSplashFinished
+    )
+}
+
+@Composable
+fun SplashScreenContent(
+    isReady: Boolean,
+    error: SplashError?,
+    onOkClicked: () -> Unit,
+    onSplashFinished: () -> Unit
+) {
     // ── Animatable values ──────────────────────────────────────────────────
     val logoAlpha  = remember { Animatable(0f) }
     val logoScale  = remember { Animatable(0.7f) }
     val textAlpha  = remember { Animatable(0f) }
     val textOffset = remember { Animatable(20f) }   // offset Y (dp) ke atas
+
+    // Status animasi minimal selesai (3 detik)
+    val isAnimationFinished = remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         // Logo muncul + sedikit scale-up
@@ -86,9 +113,16 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             )
         }
 
-        // Tunggu sebelum pindah layar
+        // Tunggu minimal 3 detik untuk animasi
         delay(3000)
-        onSplashFinished()
+        isAnimationFinished.value = true
+    }
+
+    // Navigasi dilakukan HANYA jika data Ready DAN animasi sudah 3 detik
+    LaunchedEffect(isReady, isAnimationFinished.value) {
+        if (isReady && isAnimationFinished.value) {
+            onSplashFinished()
+        }
     }
 
     // ── UI ────────────────────────────────────────────────────────────────
@@ -180,15 +214,39 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+
+        // ── Error Dialog ──────────────────────────────────────────────
+        if (error != null) {
+            AlertDialog(
+                onDismissRequest = { /* Prevent dismiss on outside click */ },
+                title = { 
+                    Text(text = if (error == SplashError.NoInternet) "No Connection" else "System Error") 
+                },
+                text = { 
+                    Text(
+                        text = if (error == SplashError.NoInternet) 
+                            "Please check your internet connection and try again." 
+                        else 
+                            "We couldn't fetch some data, but you can still continue."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = onOkClicked) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
     }
 }
 
 @Preview
 @Composable
 fun PreviewSplashScreen(){
-    // Di NavHost atau entry point app
-    SplashScreen(
-        onSplashFinished = {
-        }
+    SplashScreenContent(
+        isReady = true,
+        error = null,
+        onOkClicked = {},
+        onSplashFinished = {}
     )
 }

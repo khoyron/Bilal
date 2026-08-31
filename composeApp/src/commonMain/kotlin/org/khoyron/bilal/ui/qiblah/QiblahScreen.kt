@@ -24,10 +24,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -39,10 +41,9 @@ import bilal.composeapp.generated.resources.ic_current_location
 import bilal.composeapp.generated.resources.ic_get_current_position
 import bilal.composeapp.generated.resources.the_pointer_qiblah
 import org.jetbrains.compose.resources.painterResource
-import org.kmp.ksensor.sensor.KSensor
-import org.kmp.ksensor.permission.PermissionStatus
 import androidx.compose.runtime.DisposableEffect
-import org.kmp.ksensor.permission.PermissionType
+import org.khoyron.bilal.util.RequestLocationPermission
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 
 // ── Warna tema ────────────────────────────────────────────────────────────────
@@ -55,6 +56,22 @@ private val TextDark      = Color(0xFF1A1A1A)
 private val TextMid       = Color(0xFF6B7280)
 private val White         = Color.White
 
+
+@Preview
+@Composable
+fun QiblahPreview() {
+    QiblahContent(
+        uiState = QiblahUiState(
+            locationName = "Makkah, Saudi Arabia",
+            qiblahAngle = 100f,
+            deviceBearing = 45f,
+            directionDescription = "Your device is currently facing North-East towards the Holy Kaaba.",
+            rotationInstruction = "Rotate the phone 55° to the left"
+        ),
+        onRefresh = {}
+    )
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -64,31 +81,52 @@ fun QiblahScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     // ── Request permission & start sensor ─────────────────────────────────
-    KSensor.AskPermission(
-        permissionType = PermissionType.LOCATION
-    ) { status ->
-        when (status) {
-            PermissionStatus.GRANTED -> viewModel.startSensors()
-            PermissionStatus.DENIED  -> {  }
-            else -> {}
-        }
-    }
+    RequestLocationPermission(
+        onGranted = { viewModel.startSensors() },
+        onDenied = { /* Handle denied */ }
+    )
 
     // ── Stop sensor saat screen keluar dari komposisi ─────────────────────
     DisposableEffect(Unit) {
         onDispose { viewModel.stopSensors() }
     }
 
+    QiblahContent(
+        uiState = uiState,
+        onRefresh = { viewModel.refreshLocation() }
+    )
+}
+
+@Composable
+fun QiblahContent(
+    uiState: QiblahUiState,
+    onRefresh: () -> Unit
+) {
+    // Logic to prevent 360-degree jump when passing North
+    var continuousBearing by remember { mutableFloatStateOf(uiState.deviceBearing) }
+    var continuousQiblah by remember { mutableFloatStateOf(uiState.qiblahAngle) }
+
+    // Revert to original remember(key) pattern as preferred by user
+    remember(uiState.deviceBearing) {
+        val diff = (uiState.deviceBearing - (continuousBearing % 360f) + 540f) % 360f - 180f
+        continuousBearing += diff
+    }
+
+    remember(uiState.qiblahAngle) {
+        val diff = (uiState.qiblahAngle - (continuousQiblah % 360f) + 540f) % 360f - 180f
+        continuousQiblah += diff
+    }
+
     // Animasi bearing device (untuk rotasi kompas N/S/E/W)
     val animatedBearing by animateFloatAsState(
-        targetValue   = uiState.deviceBearing,
+        targetValue   = continuousBearing,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label         = "bearing_rotation"
     )
 
     // Animasi pointer qiblah
     val animatedQiblahAngle by animateFloatAsState(
-        targetValue   = uiState.qiblahAngle,
+        targetValue   = continuousQiblah,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label         = "qiblah_rotation"
     )
@@ -97,10 +135,10 @@ fun QiblahScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BgPage),
+                .background(Color.White),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            QiblahTopBar(onGetLocation = { viewModel.refreshLocation() })
+            QiblahTopBar(onGetLocation = onRefresh)
 
             Spacer(Modifier.height(20.dp))
 
@@ -162,8 +200,8 @@ fun QiblahCompass(
     // Kompas rotate berlawanan dengan device → N selalu menunjuk Utara bumi
     val compassRotation = -deviceBearing
 
-    // Pointer rotate: qiblahAngle dikurangi deviceBearing → selalu locked ke Qibla
-    val pointerRotation = qiblahAngle - deviceBearing + 103f
+    // Pointer rotate: qiblahAngle dikurangi deviceBearing
+    val pointerRotation = (qiblahAngle - deviceBearing)
 
     Box(
         contentAlignment = Alignment.Center,
@@ -251,8 +289,14 @@ fun QiblahCompass(
                 .clip(CircleShape)
                 .background(White)
         ) {
+            // Calculate shortest diff between qiblah and device bearing
+            var diff = qiblahAngle - deviceBearing
+            while (diff < -180) diff += 360
+            while (diff > 180) diff -= 360
+            val displayAngle = diff.toInt().let { if (it < 0) -it else it }
+
             Text(
-                text       = "${qiblahAngle.toInt()}°",
+                text       = "$displayAngle°",
                 fontSize   = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color      = Green,
@@ -309,7 +353,7 @@ fun LocationCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(BgCard)
+            .background(BgPage)
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
